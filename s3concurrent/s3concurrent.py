@@ -6,7 +6,6 @@ from boto.s3.bucket import Bucket
 from Queue import Queue
 import os
 import ntpath
-import multiprocessing
 import time
 import threading
 import hashlib
@@ -18,7 +17,15 @@ downloadable_keys_queue = Queue()
 
 all_downloaded = False
 
+
 def enqueue_s3_keys(s3_bucket, prefix, destination_folder):
+    '''
+    En-queues S3 Keys to be downloaded.
+
+    :param s3_bucket:               Boto Bucket object that contains the keys to be downloaded
+    :param prefix:                  The path to the S3 folder to be downloaded, exp bucket_root/folder_1
+    :param destination_folder:      The relative or absolute path to the folder you wish to download to
+    '''
     global enqueued_counter
 
     bucket_list = s3_bucket.list(prefix=prefix)
@@ -32,20 +39,40 @@ def enqueue_s3_keys(s3_bucket, prefix, destination_folder):
 
         enqueued_counter += 1
 
+
 def folder_hierarchy_builder(destination):
+    '''
+    Builds up the folder hierarchy for the destination file path.
+
+    :param destination:         The file path the downloaded file is supposed to be saved to.
+    '''
     if not os.path.exists(destination):
         containing_dir = ntpath.dirname(destination)
         if not os.path.exists(containing_dir):
             os.makedirs(containing_dir)
 
+
 def download_key(key, local_destination_path):
+    '''
+    Downloads the S3 key into the local destination.
+
+    :param key:                         The S3 key object.
+    :param local_destination_path:      (str), path to download the key to
+    '''
     if download_required(key, local_destination_path):
         try:
             key.get_contents_to_filename(local_destination_path)
         except:
             print('Error: Error downloading file with key: {0}'.format(key.name))
 
+
 def download_required(key, local_destination_path):
+    '''
+    Checks if the local file is identical to the S3 key by using the file's md5 hash.
+
+    :param key:                         The S3 key object.
+    :param local_destination_path:      (str), path to download the key to
+    '''
     download_needed = True
     if os.path.exists(local_destination_path):
         s3_md5 = key.etag
@@ -55,7 +82,16 @@ def download_required(key, local_destination_path):
     
     return download_needed
 
+
 def consume_download_queue(enqueue_thread, thread_pool_size):
+    '''
+    Consumes the download queue with the designated thread poll size by downloading the keys to
+    their respective destinations.
+
+    :param enqueue_thread:          The thread used to en-queue the download queue. It's used to indicate if
+                                    en-queuing is done.
+    :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to download files.)
+    '''
     global de_queue_counter
 
     thread_pool = []
@@ -75,6 +111,9 @@ def consume_download_queue(enqueue_thread, thread_pool_size):
 
 
 def print_status():
+    '''
+    Reports the download situation to console.
+    '''
     global all_downloaded
     while True and not all_downloaded:
         # report progress every 10 secs
@@ -83,6 +122,19 @@ def print_status():
 
 
 def action(S3_KEY, S3_SECRET, bucket_name, prefix, destination_folder):
+    '''
+    Orchestrates the en-queuing and consuming threads in conducting:
+    1. Local folder structure construction
+    2. S3 key en-queuing
+    3. S3 key downloading if file updated
+
+    :param S3_KEY:                  Your S3 API Key
+    :param S3_SECRET:               Your S3 API Secret
+    :param bucket_name:             Your S3 bucket name
+    :param prefix:                  Your path to the S3 folder to be downloaded, exp bucket_root/folder_1
+    :param destination_folder:      The destination folder you are downloading S3 files to
+    :return:                        True is all downloaded, false if interrupted in any way
+    '''
     conn = S3Connection(S3_KEY, S3_SECRET)
     bucket = Bucket(connection=conn, name=bucket_name)
 
@@ -112,7 +164,7 @@ def main(command_line_args=None):
     parser.add_argument('S3_KEY', help="Your S3 API Key")
     parser.add_argument('S3_SECRET', help="Your S3 API Secret")
     parser.add_argument('bucket_name', help="Your S3 bucket name")
-    parser.add_argument('--prefix', default=None, help="Your S3 bucket prefix, exp: bucket_root/folder_1")
+    parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be downloaded, exp bucket_root/folder_1")
     parser.add_argument('--destination_folder', default='.', help="The destination folder you are downloading S3 files to.")
 
     args = parser.parse_args(command_line_args)
