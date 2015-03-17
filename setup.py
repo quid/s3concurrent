@@ -2,7 +2,8 @@ from distutils.core import setup
 
 install_requires=[
     "boto>=2.32.1",
-    "argparse>=1.3.0"
+    "argparse>=1.3.0",
+    "retrying>=1.3.3"
 ]
 
 setup(

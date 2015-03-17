@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
-from boto.s3.connection import S3Connection
-from boto.s3.bucket import Bucket
 from Queue import Queue
 import os
 import ntpath
 import time
 import threading
 import hashlib
+
+from boto.s3.connection import S3Connection
+from boto.s3.bucket import Bucket
+from retrying import retry
 
 enqueued_counter = 0
 de_queue_counter = 0
@@ -52,6 +54,21 @@ def folder_hierarchy_builder(destination):
             os.makedirs(containing_dir)
 
 
+def retry_download_key(key, local_destination_path):
+    '''
+    Retries Downloading the S3 key into the local destination for 5 times,
+    waits 1 sec between each retry.
+
+    :param key:                         The S3 key object.
+    :param local_destination_path:      (str), path to download the key to
+    '''
+    try:
+        download_key(key, local_destination_path)
+    except:
+        print('Error downloading file with key: {0}'.format(key.name))
+
+
+@retry(stop_max_attempt_number=5, wait_fixed=1000)
 def download_key(key, local_destination_path):
     '''
     Downloads the S3 key into the local destination.
@@ -59,11 +76,7 @@ def download_key(key, local_destination_path):
     :param key:                         The S3 key object.
     :param local_destination_path:      (str), path to download the key to
     '''
-    if download_required(key, local_destination_path):
-        try:
-            key.get_contents_to_filename(local_destination_path)
-        except:
-            print('Error: Error downloading file with key: {0}'.format(key.name))
+    key.get_contents_to_filename(local_destination_path)
 
 
 def download_required(key, local_destination_path):
@@ -103,7 +116,7 @@ def consume_download_queue(enqueue_thread, thread_pool_size):
 
         # en-pool new threads
         if not downloadable_keys_queue.empty() and len(thread_pool) <= thread_pool_size:
-            t = threading.Thread(target=download_key, args=downloadable_keys_queue.get())
+            t = threading.Thread(target=retry_download_key, args=downloadable_keys_queue.get())
             t.start()
             thread_pool.append(t)
 
@@ -115,7 +128,7 @@ def print_status():
     Reports the download situation to console.
     '''
     global all_downloaded
-    while True and not all_downloaded:
+    while not all_downloaded:
         # report progress every 10 secs
         time.sleep(10)        
         print('{0} keys enqueued, and {1} keys downloaded'.format(enqueued_counter, de_queue_counter))
@@ -157,7 +170,7 @@ def action(S3_KEY, S3_SECRET, bucket_name, prefix, destination_folder):
     if all_downloaded:
         print('All keys are downloaded')
     else:
-        print('Download Error')
+        print('Download Interrupted')
 
 
 def main(command_line_args=None):
