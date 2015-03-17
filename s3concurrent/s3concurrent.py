@@ -150,7 +150,8 @@ def action(S3_KEY, S3_SECRET, bucket_name, prefix, destination_folder):
     time.sleep(1)
 
     consume_download_queue(enqueue_thread, 20)
-    
+
+    global all_downloaded
     all_downloaded = True
 
     if all_downloaded:
