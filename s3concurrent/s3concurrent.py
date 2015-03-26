@@ -149,14 +149,14 @@ def consume_download_queue(enqueue_thread, thread_pool_size, queue):
     :param queue:                   A DownloadKeyQueue instance to consume all the keys from
     '''
     thread_pool = []
-    while enqueue_thread.is_alive() or not queue.empty():
+    while enqueue_thread.is_alive() or not queue.is_empty():
         # de-pool the done threads
         for t in thread_pool:
             if not t.is_alive():
                 thread_pool.remove(t)
 
         # en-pool new threads
-        if not queue.empty() and len(thread_pool) <= thread_pool_size:
+        if not queue.is_empty() and len(thread_pool) <= thread_pool_size:
             t = threading.Thread(target=retry_download_key, args=queue.de_queue())
             t.start()
             thread_pool.append(t)
@@ -196,7 +196,7 @@ def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, que
     enqueue_thread.daemon = True
     enqueue_thread.start()
 
-    report_thread = threading.Thread(target=print_status, args=(queue))
+    report_thread = threading.Thread(target=print_status, args=[queue])
     report_thread.daemon = True
     report_thread.start()
 
