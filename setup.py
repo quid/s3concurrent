@@ -16,7 +16,7 @@ setup(
     url='',
     license='LICENSE.txt',
     description='The Fastest S3 downloader for deep file structures',
-    long_description=open('README.txt').read(),
+    long_description=open('README.md').read(),
     install_requires=install_requires,
     entry_points={
     'console_scripts': [
