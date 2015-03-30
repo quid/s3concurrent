@@ -1,19 +1,17 @@
 #!/usr/bin/env python
 
 import argparse
-import os
-import ntpath
-import time
-import threading
 import hashlib
 import logging
+import ntpath
+import os
 import sys
-from Queue import Queue
+import time
+import threading
 
-from boto.s3.connection import S3Connection
 from boto.s3.bucket import Bucket
-
-from retrying import retry
+from boto.s3.connection import S3Connection
+from Queue import Queue
 
 # configure logging
 logger = logging.getLogger()
@@ -36,6 +34,7 @@ class DownloadKeyQueue:
         self.enqueued_counter = 0
         self.de_queue_counter = 0
         self.all_downloaded = False
+        self.queuing = False
 
     def enqueue_key(self, key, destination):
         '''
@@ -55,7 +54,7 @@ class DownloadKeyQueue:
         '''
         return self.downloadable_keys_queue.empty()
 
-    def de_queue(self):
+    def de_queue_a_key(self):
         '''
         De-queues a key from the queue to be downloaded.
 
@@ -70,6 +69,26 @@ class DownloadKeyQueue:
 
         return value
 
+    def is_queuing(self):
+        '''
+        Checks if queuing all the downloadable keys from S3
+
+        :return                 True if still queuing
+        '''
+        return self.queuing
+
+    def queuing_stopped(self):
+        '''
+        Stops the queuing from S3.
+        '''
+        self.queuing = False
+
+    def queuing_started(self):
+        '''
+        Starts the queuing from S3.
+        '''
+        self.queuing = True
+
 
 def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
     '''
@@ -81,6 +100,7 @@ def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
     :param queue:                   A DownloadKeyQueue instance to enqueue all the keys in
     '''
     bucket_list = s3_bucket.list(prefix=prefix)
+
     for key in bucket_list:
         # prepare local destination structure
         destination = destination_folder + key.name.replace(prefix, '', 1) if prefix else ('/' + key.name)
@@ -95,30 +115,30 @@ def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
         except:
             logger.exception('Cannot enqueue key: {0}'.format(key.name))
 
+    queue.queuing_stopped()
 
-def retry_download_key(key, local_destination_path):
+
+def consume_a_key(queue):
     '''
-    Retries Downloading the S3 key into the local destination for 5 times,
-    waits 1 sec between each retry.
+    Downloads a S3 key into the local destination.
 
-    :param key:                         The S3 key object.
-    :param local_destination_path:      (str), path to download the key to
+    :param queue:                   A DownloadKeyQueue instance to de-queue a key from
     '''
-    try:
-        download_key(key, local_destination_path)
-    except:
-        logger.exception('Error downloading file with key: {0}'.format(key.name))
+    if not queue.is_empty():
+        key, local_destination_path = queue.de_queue_a_key()
+        try:
+            if download_required(key, local_destination_path):
+                key.get_contents_to_filename(local_destination_path)
 
+        except:
+            logger.warn('Error downloading file with key: {0}, putting it back to the queue'.format(key.name))
+            logger.exception('error')
+            queue.enqueue_key(key, local_destination_path)
 
-@retry(stop_max_attempt_number=5, wait_fixed=1000)
-def download_key(key, local_destination_path):
-    '''
-    Downloads the S3 key into the local destination.
+    else:
+        # do nothing when the queue is empty
+        pass
 
-    :param key:                         The S3 key object.
-    :param local_destination_path:      (str), path to download the key to
-    '''
-    key.get_contents_to_filename(local_destination_path)
 
 
 def download_required(key, local_destination_path):
@@ -130,26 +150,28 @@ def download_required(key, local_destination_path):
     '''
     download_needed = True
     if os.path.exists(local_destination_path):
-        s3_md5 = key.etag
-        local_md5 = '"' + hashlib.md5(open(local_destination_path, 'rb').read()).hexdigest() + '"'
-        if s3_md5 == local_md5:
-            download_needed = False
+        try:
+            local_md5 = '"' + hashlib.md5(open(local_destination_path, 'rb').read()).hexdigest() + '"'
+            download_needed = key.etag == local_md5
+
+        except:
+            logger.warn(
+                'Cannot compare local file {0} against remote file {1}.'.format(local_destination_path, key.name))
+            logger.warn('s3concurrent will download it anyways.')
     
     return download_needed
 
 
-def consume_download_queue(enqueue_thread, thread_pool_size, queue):
+def consume_download_queue(thread_pool_size, queue):
     '''
     Consumes the download queue with the designated thread poll size by downloading the keys to
     their respective destinations.
 
-    :param enqueue_thread:          The thread used to en-queue the download queue. It's used to indicate if
-                                    en-queuing is done.
     :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to download files.)
     :param queue:                   A DownloadKeyQueue instance to consume all the keys from
     '''
     thread_pool = []
-    while enqueue_thread.is_alive() or not queue.is_empty():
+    while queue.is_queuing() or not queue.is_empty():
         # de-pool the done threads
         for t in thread_pool:
             if not t.is_alive():
@@ -157,24 +179,12 @@ def consume_download_queue(enqueue_thread, thread_pool_size, queue):
 
         # en-pool new threads
         if not queue.is_empty() and len(thread_pool) <= thread_pool_size:
-            t = threading.Thread(target=retry_download_key, args=queue.de_queue())
+            t = threading.Thread(target=consume_a_key, args=[queue])
             t.start()
             thread_pool.append(t)
 
 
-def print_status(queue):
-    '''
-    Reports the download situation to console.
-
-    :param queue:                   A DownloadKeyQueue instance where all the queuing info is stored
-    '''
-    while not queue.all_downloaded:
-        # report progress every 10 secs
-        time.sleep(10)
-        logger.info('{0} keys enqueued, and {1} keys downloaded'.format(queue.enqueued_counter, queue.de_queue_counter))
-
-
-def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, queue):
+def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, queue, thread_count):
     '''
     Orchestrates the en-queuing and consuming threads in conducting:
     1. Local folder structure construction
@@ -182,11 +192,12 @@ def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, que
     3. S3 key downloading if file updated
 
     :param s3_key:                  Your S3 API Key
-    :param S3_SECRET:               Your S3 API Secret
+    :param s3_secret:               Your S3 API Secret
     :param bucket_name:             Your S3 bucket name
     :param prefix:                  Your path to the S3 folder to be downloaded, exp bucket_root/folder_1
     :param destination_folder:      The destination folder you are downloading S3 files to
     :param queue:                   A DownloadKeyQueue instance to enqueue all the keys in
+    :param thread_count:            The number of threads that you wish s3concurrent to use
     :return:                        True is all downloaded, false if interrupted in any way
     '''
     conn = S3Connection(s3_key, s3_secret)
@@ -196,11 +207,16 @@ def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, que
     enqueue_thread.daemon = True
     enqueue_thread.start()
 
-    report_thread = threading.Thread(target=print_status, args=[queue])
-    report_thread.daemon = True
-    report_thread.start()
+    queue.queuing_started()
 
-    consume_download_queue(enqueue_thread, 20, queue)
+    consume_thread = threading.Thread(target=consume_download_queue, args=(thread_count, queue))
+    consume_thread.daemon = True
+    consume_thread.start()
+
+    while not queue.all_downloaded:
+        # report progress every 10 secs
+        logger.info('{0} keys enqueued, and {1} keys downloaded'.format(queue.enqueued_counter, queue.de_queue_counter))
+        time.sleep(10)
 
     queue.all_downloaded = True
 
@@ -212,13 +228,14 @@ def main(command_line_args=None):
     parser.add_argument('bucket_name', help="Your S3 bucket name")
     parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be downloaded, exp bucket_root/folder_1")
     parser.add_argument('--destination_folder', default='.', help="The destination folder you are downloading S3 files to.")
+    parser.add_argument('--thread_count', default=10, help="The number of threads that you wish s3concurrent to use")
 
     args = parser.parse_args(command_line_args)
 
     queue = DownloadKeyQueue()
 
     if args.s3_key and args.s3_secret and args.bucket_name:
-        download_all(args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.destination_folder, queue)
+        download_all(args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.destination_folder, queue, int(args.thread_count))
 
         if queue.all_downloaded:
             logger.info('All keys are downloaded')
