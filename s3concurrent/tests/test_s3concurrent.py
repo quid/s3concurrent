@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-import unittest
 import mock
-from s3concurrent import s3concurrent
 import os
 import shutil
 import time
+import unittest
 
+from s3concurrent import s3concurrent
 
 sandbox = os.path.dirname(os.path.realpath(__file__)) + '/sandbox'
 
