@@ -132,13 +132,11 @@ def consume_a_key(queue):
 
         except:
             logger.warn('Error downloading file with key: {0}, putting it back to the queue'.format(key.name))
-            logger.exception('error')
             queue.enqueue_key(key, local_destination_path)
 
     else:
         # do nothing when the queue is empty
         pass
-
 
 
 def download_required(key, local_destination_path):
@@ -152,13 +150,13 @@ def download_required(key, local_destination_path):
     if os.path.exists(local_destination_path):
         try:
             local_md5 = '"' + hashlib.md5(open(local_destination_path, 'rb').read()).hexdigest() + '"'
-            download_needed = key.etag == local_md5
+            download_needed = key.etag != local_md5
 
         except:
-            logger.warn(
-                'Cannot compare local file {0} against remote file {1}.'.format(local_destination_path, key.name))
-            logger.warn('s3concurrent will download it anyways.')
-    
+            logger.exception(
+                'Cannot compare local file {0} against remote file {1}. s3concurrent will download it anyways.'
+                .format(local_destination_path, key.name))
+
     return download_needed
 
 
