@@ -181,6 +181,8 @@ def consume_download_queue(thread_pool_size, queue):
             t.start()
             thread_pool.append(t)
 
+    queue.all_downloaded = True
+
 
 def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, queue, thread_count):
     '''
@@ -215,8 +217,6 @@ def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, que
         # report progress every 10 secs
         logger.info('{0} keys enqueued, and {1} keys downloaded'.format(queue.enqueued_counter, queue.de_queue_counter))
         time.sleep(10)
-
-    queue.all_downloaded = True
 
 
 def main(command_line_args=None):

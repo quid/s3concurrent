@@ -27,7 +27,7 @@ s3concurrent brings you a local command you can use directly in your terminals.
 Assuming you are downloading the entire clone of pip repositories into your local mirror from S3:
 
 ```
-s3concurrent <your_S3_Key> <your_S3_Secret> <your_S3_bucket_name> --destination_folder my_local_mirror_dir --prefix mirror/pypi
+s3concurrent <your_S3_Key> <your_S3_Secret> <your_S3_bucket_name> --destination_folder my_local_mirror_dir --prefix mirror/pypi --thread_count 20
 ```
 
 ## Optional
@@ -37,3 +37,7 @@ Absolute or relative path to the destination local folder. The default value is 
 ### prefix
 The folder prefix in S3. If your wish to download all the files under folder_a/folder_b in a bucket.
 All you have to do here is to specify the prefix to `folder_a/folder_b`
+
+### thread_count
+
+The number of threads that s3concurrent will use to download the files. The default value is 10.
