@@ -43,3 +43,7 @@ Absolute or relative path to the local folder. The default value is the current 
 ### prefix
 The folder prefix in S3. If your wish to download all the files under folder_a/folder_b in a bucket.
 All you have to do here is to specify the prefix to `folder_a/folder_b`
+
+### thread_count
+
+The number of threads that s3concurrent will use to download the files. The default value is 10.
