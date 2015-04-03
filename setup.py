@@ -21,6 +21,7 @@ setup(
     install_requires=install_requires,
     entry_points={
     'console_scripts': [
-        's3concurrent=s3concurrent.s3concurrent:main',
+        's3concurrent_download=s3concurrent.s3concurrent:s3concurrent_download',
+        's3concurrent_upload=s3concurrent.s3concurrent:s3concurrent_upload'
     ]}
 )
