@@ -11,6 +11,7 @@ import threading
 
 from boto.s3.bucket import Bucket
 from boto.s3.connection import S3Connection
+from boto.s3.key import Key
 from Queue import Queue
 
 # configure logging
@@ -24,26 +25,26 @@ ch.setFormatter(formatter)
 logger.addHandler(ch)
 
 
-class DownloadKeyQueue:
+class ProcessKeyQueue:
     '''
-    DownloadKeyQueue implements the queuing functions needed for s3concurrent download.
+    ProcessKeyQueue implements the queuing functions needed for s3concurrent upload/download.
     '''
 
     def __init__(self):
-        self.downloadable_keys_queue = Queue()
+        self.process_able_keys_queue = Queue()
         self.enqueued_counter = 0
         self.de_queue_counter = 0
-        self.all_downloaded = False
+        self.all_processed = False
         self.queuing = False
 
-    def enqueue_key(self, key, destination):
+    def enqueue_item(self, key, local_file_path):
         '''
-        Enqueues a key to be downloaded to the local destination.
+        Enqueues an item to be downloaded to the local destination.
 
-        :param key:             S3 key object to be downloaded
-        :param destination:     (string) the path the file is supposed to be downloaded to
+        :param key:                 the S3 key instance to be uploaded or downloaded
+        :param local_file_path:     the local file path corresponding to the s3 key
         '''
-        self.downloadable_keys_queue.put((key, destination))
+        self.process_able_keys_queue.put((key, local_file_path))
         self.enqueued_counter += 1
 
     def is_empty(self):
@@ -52,26 +53,25 @@ class DownloadKeyQueue:
 
         :return:                (bool) true if the queue is empty
         '''
-        return self.downloadable_keys_queue.empty()
+        return self.process_able_keys_queue.empty()
 
-    def de_queue_a_key(self):
+    def de_queue_an_item(self):
         '''
-        De-queues a key from the queue to be downloaded.
+        De-queues an item from the queue
 
-        :return:                a tuple of S3 key object and its local destination in string,
-                                None if nothing to de-queue
+        :return:                an item previously enqueued
         '''
         value = None
 
         if not self.is_empty():
-            value = self.downloadable_keys_queue.get()
+            value = self.process_able_keys_queue.get()
             self.de_queue_counter += 1
 
         return value
 
     def is_queuing(self):
         '''
-        Checks if queuing all the downloadable keys from S3
+        Checks if queuing all the process-able keys from S3
 
         :return                 True if still queuing
         '''
@@ -90,14 +90,14 @@ class DownloadKeyQueue:
         self.queuing = True
 
 
-def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
+def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
     '''
     En-queues S3 Keys to be downloaded.
 
     :param s3_bucket:               Boto Bucket object that contains the keys to be downloaded
     :param prefix:                  The path to the S3 folder to be downloaded, exp bucket_root/folder_1
     :param destination_folder:      The relative or absolute path to the folder you wish to download to
-    :param queue:                   A DownloadKeyQueue instance to enqueue all the keys in
+    :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     '''
     bucket_list = s3_bucket.list(prefix=prefix)
 
@@ -110,7 +110,7 @@ def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
                 os.makedirs(containing_dir)
         
             # enqueue
-            queue.enqueue_key(key, destination)
+            queue.enqueue_item(key, destination)
 
         except:
             logger.exception('Cannot enqueue key: {0}'.format(key.name))
@@ -118,57 +118,118 @@ def enqueue_s3_keys(s3_bucket, prefix, destination_folder, queue):
     queue.queuing_stopped()
 
 
-def consume_a_key(queue):
+def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
+    '''
+    En-queues S3 Keys to be uploaded.
+
+    :param s3_bucket:               Boto Bucket object that contains the keys to be uploaded to
+    :param prefix:                  The path to the S3 folder to be uploaded to, exp bucket_root/folder_1
+    :param from_folder:             The relative or absolute path to the folder you wish to upload from
+    :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
+    '''
+    abs_from_folder_path = os.path.abspath(from_folder)
+
+    for root, dirs, files in os.walk(abs_from_folder_path):
+        for single_file in files:
+            abs_file_path = os.path.join(root, single_file)
+
+            s3_key_name = abs_file_path.replace(abs_from_folder_path, '', 1)
+            if not s3_key_name.startswith('/') and prefix != '':
+                s3_key_name = '/' + s3_key_name
+            s3_key_name = prefix + s3_key_name
+
+            key = Key(s3_bucket)
+            key.key = s3_key_name
+
+            queue.enqueue_item(key, abs_file_path)
+
+    queue.queuing_stopped()
+
+
+def download_a_key(queue):
     '''
     Downloads a S3 key into the local destination.
 
-    :param queue:                   A DownloadKeyQueue instance to de-queue a key from
+    :param queue:                   A ProcessKeyQueue instance to de-queue a key from
     '''
     if not queue.is_empty():
-        key, local_destination_path = queue.de_queue_a_key()
+        key, local_destination_path = queue.de_queue_an_item()
         try:
-            if download_required(key, local_destination_path):
+            if is_sync_needed(key, local_destination_path):
                 key.get_contents_to_filename(local_destination_path)
 
         except:
             logger.warn('Error downloading file with key: {0}, putting it back to the queue'.format(key.name))
-            queue.enqueue_key(key, local_destination_path)
+            queue.enqueue_item(key, local_destination_path)
 
     else:
         # do nothing when the queue is empty
         pass
 
 
-def download_required(key, local_destination_path):
+def is_sync_needed(key, local_file_path):
     '''
     Checks if the local file is identical to the S3 key by using the file's md5 hash.
 
     :param key:                         The S3 key object.
-    :param local_destination_path:      (str), path to download the key to
+    :param local_file_path:             (str), path to download the key to
     '''
-    download_needed = True
-    if os.path.exists(local_destination_path):
+    sync_needed = True
+    if os.path.exists(local_file_path) and key.exists():
         try:
-            local_md5 = '"' + hashlib.md5(open(local_destination_path, 'rb').read()).hexdigest() + '"'
-            download_needed = key.etag != local_md5
+            key_etag = key.etag
+            if not key_etag:
+                key_etag = key.bucket.lookup(key.name).etag
+
+            local_md5 = '"' + hashlib.md5(open(local_file_path, 'rb').read()).hexdigest() + '"'
+            sync_needed = key_etag != local_md5
 
         except:
             logger.exception(
-                'Cannot compare local file {0} against remote file {1}. s3concurrent will download it anyways.'
-                .format(local_destination_path, key.name))
+                'Cannot compare local file {0} against remote file {1}. s3concurrent will process it anyway.'
+                .format(local_file_path, key.name))
 
-    return download_needed
+    return sync_needed
 
 
-def consume_download_queue(thread_pool_size, queue):
+def upload_a_key(queue):
     '''
-    Consumes the download queue with the designated thread poll size by downloading the keys to
+    Uploads a key up to S3.
+
+    :param queue:                   A ProcessKeyQueue instance to de-queue a key from
+    '''
+    if not queue.is_empty():
+        key, local_source_file = queue.de_queue_an_item()
+
+        if is_sync_needed(key, local_source_file):
+            try:
+                key.set_contents_from_filename(local_source_file)
+
+            except:
+                logger.warn('Error uploading file with key: {0}, putting it back to the queue'.format(key.name))
+                queue.enqueue_item(key, local_source_file)
+
+    else:
+        # do nothing when the queue is empty
+        pass
+
+
+def consume_queue(thread_pool_size, queue, action):
+    '''
+    Consumes the queue with the designated thread poll size by uploading/downloading the keys to
     their respective destinations.
 
-    :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to download files.)
-    :param queue:                   A DownloadKeyQueue instance to consume all the keys from
+    :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to process files.)
+    :param queue:                   A ProcessKeyQueue instance to consume all the keys from
+    :param action:                  download or upload
     '''
     thread_pool = []
+
+    if action == 'download':
+        target_function = download_a_key
+    else:
+        target_function = upload_a_key
+
     while queue.is_queuing() or not queue.is_empty():
         # de-pool the done threads
         for t in thread_pool:
@@ -177,71 +238,81 @@ def consume_download_queue(thread_pool_size, queue):
 
         # en-pool new threads
         if not queue.is_empty() and len(thread_pool) <= thread_pool_size:
-            t = threading.Thread(target=consume_a_key, args=[queue])
+            t = threading.Thread(target=target_function, args=[queue])
             t.start()
             thread_pool.append(t)
 
+    queue.all_processed = True
 
-def download_all(s3_key, s3_secret, bucket_name, prefix, destination_folder, queue, thread_count):
+
+def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, queue, thread_count):
     '''
     Orchestrates the en-queuing and consuming threads in conducting:
     1. Local folder structure construction
     2. S3 key en-queuing
-    3. S3 key downloading if file updated
+    3. S3 key uploading/downloading if file updated
 
+    :param action:                  download or upload
     :param s3_key:                  Your S3 API Key
     :param s3_secret:               Your S3 API Secret
     :param bucket_name:             Your S3 bucket name
-    :param prefix:                  Your path to the S3 folder to be downloaded, exp bucket_root/folder_1
-    :param destination_folder:      The destination folder you are downloading S3 files to
-    :param queue:                   A DownloadKeyQueue instance to enqueue all the keys in
+    :param prefix:                  Your path to the S3 folder to be uploaded/downloaded, exp bucket_root/folder_1
+    :param local_folder:            The local folder you wish to upload/download the files from/to
+    :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     :param thread_count:            The number of threads that you wish s3concurrent to use
-    :return:                        True is all downloaded, false if interrupted in any way
+    :return:                        True is all processed, false if interrupted in any way
     '''
     conn = S3Connection(s3_key, s3_secret)
     bucket = Bucket(connection=conn, name=bucket_name)
 
-    enqueue_thread = threading.Thread(target=enqueue_s3_keys, args=(bucket, prefix, destination_folder, queue))
+    if action == 'download':
+        target_function = enqueue_s3_keys_for_download
+    else:
+        target_function = enqueue_s3_keys_for_upload
+
+    enqueue_thread = threading.Thread(target=target_function, args=(bucket, prefix, local_folder, queue))
     enqueue_thread.daemon = True
     enqueue_thread.start()
 
     queue.queuing_started()
 
-    consume_thread = threading.Thread(target=consume_download_queue, args=(thread_count, queue))
+    consume_thread = threading.Thread(target=consume_queue, args=(thread_count, queue, action))
     consume_thread.daemon = True
     consume_thread.start()
 
-    while not queue.all_downloaded:
+    while not queue.all_processed:
         # report progress every 10 secs
-        logger.info('{0} keys enqueued, and {1} keys downloaded'.format(queue.enqueued_counter, queue.de_queue_counter))
+        logger.info('{0} keys enqueued, and {1} keys {2}ed'.format(queue.enqueued_counter, queue.de_queue_counter, action))
         time.sleep(10)
 
-    queue.all_downloaded = True
 
-
-def main(command_line_args=None):
-    parser = argparse.ArgumentParser(prog='s3download')
+def main(action, command_line_args):
+    parser = argparse.ArgumentParser(prog='s3concurrent_{0}'.format(action))
     parser.add_argument('s3_key', help="Your S3 API Key")
     parser.add_argument('s3_secret', help="Your S3 API Secret")
     parser.add_argument('bucket_name', help="Your S3 bucket name")
-    parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be downloaded, exp bucket_root/folder_1")
-    parser.add_argument('--destination_folder', default='.', help="The destination folder you are downloading S3 files to.")
+    parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be {0}ed, exp bucket_root/folder_1".format(action))
+    parser.add_argument('--local_folder', default='.', help="The local folder you are {0}ing S3 files to.".format(action))
     parser.add_argument('--thread_count', default=10, help="The number of threads that you wish s3concurrent to use")
 
     args = parser.parse_args(command_line_args)
 
-    queue = DownloadKeyQueue()
+    queue = ProcessKeyQueue()
 
     if args.s3_key and args.s3_secret and args.bucket_name:
-        download_all(args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.destination_folder, queue, int(args.thread_count))
+        process_all(action, args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.local_folder, queue, int(args.thread_count))
 
-        if queue.all_downloaded:
-            logger.info('All keys are downloaded')
+        if queue.all_processed:
+            logger.info('All keys are {0}ed'.format(action))
         else:
-            logger.info('Download Interrupted')
+            logger.info('{0} interrupted'.format(action))
 
-    return queue.all_downloaded
+    return queue.all_processed
 
 
-if __name__ == "__main__":
-    main()
+def s3concurrent_download(command_line_args=None):
+    main('download', command_line_args=command_line_args)
+
+
+def s3concurrent_upload(command_line_args=None):
+    main('upload', command_line_args=command_line_args)
