@@ -285,6 +285,8 @@ def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, qu
         logger.info('{0} keys enqueued, and {1} keys {2}ed'.format(queue.enqueued_counter, queue.de_queue_counter, action))
         time.sleep(10)
 
+    logger.info('{0} keys enqueued, and {1} keys {2}ed'.format(queue.enqueued_counter, queue.de_queue_counter, action))
+
 
 def main(action, command_line_args):
     parser = argparse.ArgumentParser(prog='s3concurrent_{0}'.format(action))
