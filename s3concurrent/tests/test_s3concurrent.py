@@ -243,11 +243,37 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertTrue(queue.is_empty())
         self.assertEquals(3, queue.de_queue_counter)
 
-    def test_process_a_key_waiting(self):
-        pass
+    #TODO: finish the following 2 test cases
 
-    def test_process_a_key_max_retry(self):
-        pass
+    @mock.patch('time.sleep')
+    @mock.patch('s3concurrent.s3concurrent.is_sync_needed', return_value=True)
+    def test_process_a_key_waiting(self, mocked_is_sync_needed, mocked_sleep):
+        mock_folder1 = 'a/b/'
+        mocked_key1 = mock.Mock()
+        mocked_key1.name = mock_folder1 + 'c'
+        mocked_key1.get_contents_to_filename = mock.Mock()
+
+        queue = s3concurrent.ProcessKeyQueue()
+        queue.enqueue_item(mocked_key1, sandbox, 2)
+
+        s3concurrent.process_a_key(queue, 'download', 3)
+
+        mocked_sleep.assert_called_once_with(4)
+
+    @mock.patch('time.sleep')
+    @mock.patch('s3concurrent.s3concurrent.is_sync_needed', return_value=True)
+    def test_process_a_key_max_retry(self, mocked_is_sync_needed, mocked_sleep):
+        mock_folder1 = 'a/b/'
+        mocked_key1 = mock.Mock()
+        mocked_key1.name = mock_folder1 + 'c'
+        mocked_key1.get_contents_to_filename = mock.Mock()
+
+        queue = s3concurrent.ProcessKeyQueue()
+        queue.enqueue_item(mocked_key1, sandbox, 2)
+
+        s3concurrent.process_a_key(queue, 'download', 1)
+
+        self.assertEquals(0, mocked_sleep.call_count)
 
     def setUp(self):
         if os.path.exists(sandbox):

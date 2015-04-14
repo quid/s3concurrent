@@ -116,6 +116,7 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
         except:
             logger.exception('Cannot enqueue key: {0}'.format(key.name))
 
+    logger.info('Initial queuing has completed. {0} keys has been enqueued.'.format(queue.enqueued_counter))
     queue.queuing_stopped()
 
 
@@ -144,6 +145,7 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
 
             queue.enqueue_item(key, abs_file_path)
 
+    logger.info('Initial queuing has completed. {0} keys has been enqueued.'.format(queue.enqueued_counter))
     queue.queuing_stopped()
 
 
@@ -200,7 +202,7 @@ def process_a_key(queue, action, max_retry):
                     key.set_contents_from_filename(local_path)
 
             elif enqueue_count > max_retry:
-                logger.error('Ignoring {0} since s3concurrent had tried downloading {0} times.'.format(key.name, max_retry))
+                logger.error('Ignoring {0} since s3concurrent had tried downloading {1} times.'.format(key.name, max_retry))
 
         except:
             logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
@@ -223,7 +225,7 @@ def consume_queue(queue, action, thread_pool_size, max_retry):
     '''
     thread_pool = []
 
-    while queue.is_queuing() or not queue.is_empty():
+    while queue.is_queuing() or not queue.is_empty() or len(thread_pool) != 0:
         # de-pool the done threads
         for t in thread_pool:
             if not t.is_alive():
