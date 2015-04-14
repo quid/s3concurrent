@@ -14,6 +14,7 @@ sandbox = os.path.dirname(os.path.realpath(__file__)) + '/sandbox/'
 class TestS3Concurrent(unittest.TestCase):
 
     def test_enqueue_s3_keys_for_download(self):
+
         mock_folder1 = 'a/b/'
         mocked_key1 = mock.Mock()
         mocked_key1.name = mock_folder1 + 'c'
@@ -88,7 +89,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertEquals(queue.enqueued_counter, 1)
 
-        s3concurrent.download_a_key(queue)
+        s3concurrent.process_a_key(queue, 'download', 1)
 
         self.assertEquals(queue.de_queue_counter, 1)
         self.assertTrue(queue.is_empty())
@@ -106,7 +107,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertEquals(queue.enqueued_counter, 1)
 
-        s3concurrent.download_a_key(queue)
+        s3concurrent.process_a_key(queue, 'download', 1)
 
         self.assertEquals(queue.de_queue_counter, 1)
         mocked_key1.get_contents_to_filename.assert_called_once_with(sandbox)
@@ -129,7 +130,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertEquals(queue.enqueued_counter, 1)
 
-        s3concurrent.upload_a_key(queue)
+        s3concurrent.process_a_key(queue, 'upload', 1)
 
         self.assertEquals(queue.de_queue_counter, 1)
         self.assertTrue(queue.is_empty())
@@ -148,7 +149,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertEquals(queue.enqueued_counter, 1)
 
-        s3concurrent.upload_a_key(queue)
+        s3concurrent.process_a_key(queue, 'upload', 1)
 
         self.assertEquals(queue.de_queue_counter, 1)
         mocked_key1.set_contents_from_filename.assert_called_once_with(sandbox)
@@ -186,7 +187,7 @@ class TestS3Concurrent(unittest.TestCase):
         download = s3concurrent.is_sync_needed(mocked_key1, sandbox + '/a.txt')
         self.assertTrue(download)
 
-    @mock.patch('s3concurrent.s3concurrent.download_a_key')
+    @mock.patch('s3concurrent.s3concurrent.process_a_key')
     def test_consume_download_queue(self, mocked_consume_a_key):
         mocked_key1 = mock.Mock()
         mocked_key2 = mock.Mock()
@@ -200,7 +201,7 @@ class TestS3Concurrent(unittest.TestCase):
         queue.enqueue_item(mocked_key3, sandbox)
         queue.queuing_stopped()
 
-        def mock_dequeue_a_key(queue):
+        def mock_dequeue_a_key(queue, action, max_retry):
             queue.de_queue_an_item()
 
         mocked_consume_a_key.side_effect = mock_dequeue_a_key
@@ -208,13 +209,13 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertFalse(queue.is_empty())
         self.assertEquals(3, queue.enqueued_counter)
 
-        s3concurrent.consume_queue(3, queue, 'download')
+        s3concurrent.consume_queue(queue, 'download', 3, 1)
         time.sleep(0.1)
 
         self.assertTrue(queue.is_empty())
         self.assertEquals(3, queue.de_queue_counter)
 
-    @mock.patch('s3concurrent.s3concurrent.upload_a_key')
+    @mock.patch('s3concurrent.s3concurrent.process_a_key')
     def test_consume_upload_queue(self, mocked_consume_a_key):
         mocked_key1 = mock.Mock()
         mocked_key2 = mock.Mock()
@@ -228,7 +229,7 @@ class TestS3Concurrent(unittest.TestCase):
         queue.enqueue_item(mocked_key3, sandbox)
         queue.queuing_stopped()
 
-        def mock_dequeue_a_key(queue):
+        def mock_dequeue_a_key(queue, action, max_retry):
             queue.de_queue_an_item()
 
         mocked_consume_a_key.side_effect = mock_dequeue_a_key
@@ -236,7 +237,7 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertFalse(queue.is_empty())
         self.assertEquals(3, queue.enqueued_counter)
 
-        s3concurrent.consume_queue(3, queue, 'upload')
+        s3concurrent.consume_queue(queue, 'upload', 3, 1)
         time.sleep(0.1)
 
         self.assertTrue(queue.is_empty())

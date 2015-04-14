@@ -147,6 +147,31 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
     queue.queuing_stopped()
 
 
+def is_sync_needed(key, local_file_path):
+    '''
+    Checks if the local file is identical to the S3 key by using the file's md5 hash.
+
+    :param key:                         The S3 key object.
+    :param local_file_path:             (str), path to download the key to
+    '''
+    sync_needed = True
+    if os.path.exists(local_file_path) and key.exists():
+        try:
+            key_etag = key.etag
+            if not key_etag:
+                key_etag = key.bucket.lookup(key.name).etag
+
+            local_md5 = '"' + hashlib.md5(open(local_file_path, 'rb').read()).hexdigest() + '"'
+            sync_needed = key_etag != local_md5
+
+        except:
+            logger.exception(
+                'Cannot compare local file {0} against remote file {1}. s3concurrent will process it anyway.'
+                .format(local_file_path, key.name))
+
+    return sync_needed
+
+
 def process_a_key(queue, action, max_retry):
     '''
     Process (download or upload) a S3 key from/to respective local path.
@@ -184,31 +209,6 @@ def process_a_key(queue, action, max_retry):
     else:
         # do nothing when the queue is empty
         pass
-
-
-def is_sync_needed(key, local_file_path):
-    '''
-    Checks if the local file is identical to the S3 key by using the file's md5 hash.
-
-    :param key:                         The S3 key object.
-    :param local_file_path:             (str), path to download the key to
-    '''
-    sync_needed = True
-    if os.path.exists(local_file_path) and key.exists():
-        try:
-            key_etag = key.etag
-            if not key_etag:
-                key_etag = key.bucket.lookup(key.name).etag
-
-            local_md5 = '"' + hashlib.md5(open(local_file_path, 'rb').read()).hexdigest() + '"'
-            sync_needed = key_etag != local_md5
-
-        except:
-            logger.exception(
-                'Cannot compare local file {0} against remote file {1}. s3concurrent will process it anyway.'
-                .format(local_file_path, key.name))
-
-    return sync_needed
 
 
 def consume_queue(queue, action, thread_pool_size, max_retry):

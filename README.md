@@ -38,12 +38,18 @@ s3concurrent_upload <your_S3_Key> <your_S3_Secret> <your_anothger_S3_bucket_name
 
 ## Optional
 ### local_folder
+
 Absolute or relative path to the local folder. The default value is the current directory that you are in.
 
 ### prefix
+
 The folder prefix in S3. If your wish to download all the files under folder_a/folder_b in a bucket.
 All you have to do here is to specify the prefix to `folder_a/folder_b`
 
 ### thread_count
 
 The number of threads that s3concurrent will use to download the files. The default value is 10.
+
+### max_retry
+
+The max times for s3copncurrent to retry uploading/downloading a key
