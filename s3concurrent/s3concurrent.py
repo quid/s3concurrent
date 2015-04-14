@@ -37,14 +37,15 @@ class ProcessKeyQueue:
         self.all_processed = False
         self.queuing = False
 
-    def enqueue_item(self, key, local_file_path):
+    def enqueue_item(self, key, local_file_path, enqueue_count=1):
         '''
         Enqueues an item to be downloaded to the local destination.
 
         :param key:                 the S3 key instance to be uploaded or downloaded
         :param local_file_path:     the local file path corresponding to the s3 key
+        :param enqueue_count:       the count that the same key is enqueued
         '''
-        self.process_able_keys_queue.put((key, local_file_path))
+        self.process_able_keys_queue.put((key, local_file_path, enqueue_count))
         self.enqueued_counter += 1
 
     def is_empty(self):
@@ -146,21 +147,35 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
     queue.queuing_stopped()
 
 
-def download_a_key(queue):
+def process_a_key(queue, action):
     '''
-    Downloads a S3 key into the local destination.
+    Process (download or upload) a S3 key from/to respective local path.
 
     :param queue:                   A ProcessKeyQueue instance to de-queue a key from
+    :param action:                  download or upload
     '''
     if not queue.is_empty():
-        key, local_destination_path = queue.de_queue_an_item()
+        key, local_path, enqueue_count = queue.de_queue_an_item()
+
         try:
-            if is_sync_needed(key, local_destination_path):
-                key.get_contents_to_filename(local_destination_path)
+
+            if is_sync_needed(key, local_path):
+
+                # wait accordingly to enqueue_count
+                if enqueue_count > 1:
+                    wait_time = enqueue_count ** 2
+                    logger.info('Attempt no.{0} to {1} {2}. Wait {3} secs.'.format(enqueue_count, action, key.name, wait_time))
+                    time.sleep(wait_time)
+
+                # conduct upload/download
+                if action == 'download':
+                    key.get_contents_to_filename(local_path)
+                else:
+                    key.set_contents_from_filename(local_path)
 
         except:
-            logger.warn('Error downloading file with key: {0}, putting it back to the queue'.format(key.name))
-            queue.enqueue_item(key, local_destination_path)
+            logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
+            queue.enqueue_item(key, local_path, enqueue_count=enqueue_count + 1)
 
     else:
         # do nothing when the queue is empty
@@ -192,28 +207,6 @@ def is_sync_needed(key, local_file_path):
     return sync_needed
 
 
-def upload_a_key(queue):
-    '''
-    Uploads a key up to S3.
-
-    :param queue:                   A ProcessKeyQueue instance to de-queue a key from
-    '''
-    if not queue.is_empty():
-        key, local_source_file = queue.de_queue_an_item()
-
-        if is_sync_needed(key, local_source_file):
-            try:
-                key.set_contents_from_filename(local_source_file)
-
-            except:
-                logger.warn('Error uploading file with key: {0}, putting it back to the queue'.format(key.name))
-                queue.enqueue_item(key, local_source_file)
-
-    else:
-        # do nothing when the queue is empty
-        pass
-
-
 def consume_queue(thread_pool_size, queue, action):
     '''
     Consumes the queue with the designated thread poll size by uploading/downloading the keys to
@@ -225,11 +218,6 @@ def consume_queue(thread_pool_size, queue, action):
     '''
     thread_pool = []
 
-    if action == 'download':
-        target_function = download_a_key
-    else:
-        target_function = upload_a_key
-
     while queue.is_queuing() or not queue.is_empty():
         # de-pool the done threads
         for t in thread_pool:
@@ -238,7 +226,7 @@ def consume_queue(thread_pool_size, queue, action):
 
         # en-pool new threads
         if not queue.is_empty() and len(thread_pool) <= thread_pool_size:
-            t = threading.Thread(target=target_function, args=[queue])
+            t = threading.Thread(target=process_a_key, args=[queue, action])
             t.start()
             thread_pool.append(t)
 
