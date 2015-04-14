@@ -147,19 +147,20 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
     queue.queuing_stopped()
 
 
-def process_a_key(queue, action):
+def process_a_key(queue, action, max_retry):
     '''
     Process (download or upload) a S3 key from/to respective local path.
 
     :param queue:                   A ProcessKeyQueue instance to de-queue a key from
     :param action:                  download or upload
+    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
     '''
     if not queue.is_empty():
         key, local_path, enqueue_count = queue.de_queue_an_item()
 
         try:
 
-            if is_sync_needed(key, local_path):
+            if is_sync_needed(key, local_path) and enqueue_count <= max_retry:
 
                 # wait accordingly to enqueue_count
                 if enqueue_count > 1:
@@ -172,6 +173,9 @@ def process_a_key(queue, action):
                     key.get_contents_to_filename(local_path)
                 else:
                     key.set_contents_from_filename(local_path)
+
+            elif enqueue_count > max_retry:
+                logger.error('Ignoring {0} since s3concurrent had tried downloading {0} times.'.format(key.name, max_retry))
 
         except:
             logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
@@ -207,14 +211,15 @@ def is_sync_needed(key, local_file_path):
     return sync_needed
 
 
-def consume_queue(thread_pool_size, queue, action):
+def consume_queue(queue, action, thread_pool_size, max_retry):
     '''
     Consumes the queue with the designated thread poll size by uploading/downloading the keys to
     their respective destinations.
 
-    :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to process files.)
     :param queue:                   A ProcessKeyQueue instance to consume all the keys from
     :param action:                  download or upload
+    :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to process files.)
+    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
     '''
     thread_pool = []
 
@@ -226,14 +231,14 @@ def consume_queue(thread_pool_size, queue, action):
 
         # en-pool new threads
         if not queue.is_empty() and len(thread_pool) <= thread_pool_size:
-            t = threading.Thread(target=process_a_key, args=[queue, action])
+            t = threading.Thread(target=process_a_key, args=[queue, action, max_retry])
             t.start()
             thread_pool.append(t)
 
     queue.all_processed = True
 
 
-def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, queue, thread_count):
+def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, queue, thread_count, max_retry):
     '''
     Orchestrates the en-queuing and consuming threads in conducting:
     1. Local folder structure construction
@@ -248,6 +253,7 @@ def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, qu
     :param local_folder:            The local folder you wish to upload/download the files from/to
     :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     :param thread_count:            The number of threads that you wish s3concurrent to use
+    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
     :return:                        True is all processed, false if interrupted in any way
     '''
     conn = S3Connection(s3_key, s3_secret)
@@ -264,7 +270,7 @@ def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, qu
 
     queue.queuing_started()
 
-    consume_thread = threading.Thread(target=consume_queue, args=(thread_count, queue, action))
+    consume_thread = threading.Thread(target=consume_queue, args=(queue, action, thread_count, max_retry))
     consume_thread.daemon = True
     consume_thread.start()
 
@@ -284,13 +290,14 @@ def main(action, command_line_args):
     parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be {0}ed, exp bucket_root/folder_1".format(action))
     parser.add_argument('--local_folder', default='.', help="The local folder you are {0}ing S3 files to.".format(action))
     parser.add_argument('--thread_count', default=10, help="The number of threads that you wish s3concurrent to use")
+    parser.add_argument('--max_retry', default=10, help="The max times for s3copncurrent to retry uploading/downloading a key")
 
     args = parser.parse_args(command_line_args)
 
     queue = ProcessKeyQueue()
 
     if args.s3_key and args.s3_secret and args.bucket_name:
-        process_all(action, args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.local_folder, queue, int(args.thread_count))
+        process_all(action, args.s3_key, args.s3_secret, args.bucket_name, args.prefix, args.local_folder, queue, int(args.thread_count), int(args.max_retry))
 
         if queue.all_processed:
             logger.info('All keys are {0}ed'.format(action))
