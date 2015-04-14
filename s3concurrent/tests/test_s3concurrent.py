@@ -243,6 +243,12 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertTrue(queue.is_empty())
         self.assertEquals(3, queue.de_queue_counter)
 
+    def test_process_a_key_waiting(self):
+        pass
+
+    def test_process_a_key_max_retry(self):
+        pass
+
     def setUp(self):
         if os.path.exists(sandbox):
             shutil.rmtree(sandbox)
