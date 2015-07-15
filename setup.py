@@ -15,8 +15,8 @@ setup(
     packages=['s3concurrent'],
     scripts=[],
     url='',
-    license='LICENSE.txt',
-    description='The Fastest S3 downloader for deep file structures',
+    license='LICENSE',
+    description='A fast S3 downloader/uploader for deep file structures',
     long_description=open('README.md').read(),
     install_requires=install_requires,
     entry_points={

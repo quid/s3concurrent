@@ -39,11 +39,11 @@ class ProcessKeyQueue:
 
     def enqueue_item(self, key, local_file_path, enqueue_count=1):
         '''
-        Enqueues an item to be downloaded to the local destination.
+        Enqueues an item to upload/download.
 
-        :param key:                 the S3 key instance to be uploaded or downloaded
-        :param local_file_path:     the local file path corresponding to the s3 key
-        :param enqueue_count:       the count that the same key is enqueued
+        :param key:                 s3 key to upload/download
+        :param local_file_path:     local file path corresponding to the s3 key
+        :param enqueue_count:       number of times this key has been enqueued
         '''
         self.process_able_keys_queue.put((key, local_file_path, enqueue_count))
         self.enqueued_counter += 1
@@ -287,12 +287,12 @@ def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, qu
 def main(action, command_line_args):
     parser = argparse.ArgumentParser(prog='s3concurrent_{0}'.format(action))
     parser.add_argument('s3_key', help="Your S3 API Key")
-    parser.add_argument('s3_secret', help="Your S3 API Secret")
+    parser.add_argument('s3_secret', help="Your S3 secret Key")
     parser.add_argument('bucket_name', help="Your S3 bucket name")
-    parser.add_argument('--prefix', default=None, help="Your path to the S3 folder to be {0}ed, exp bucket_root/folder_1".format(action))
-    parser.add_argument('--local_folder', default='.', help="The local folder you are {0}ing S3 files to.".format(action))
-    parser.add_argument('--thread_count', default=10, help="The number of threads that you wish s3concurrent to use")
-    parser.add_argument('--max_retry', default=10, help="The max times for s3copncurrent to retry uploading/downloading a key")
+    parser.add_argument('--prefix', default=None, help="Path to a folder in the S3 bucket (e.g. my/dest/folder/)".format(action))
+    parser.add_argument('--local_folder', default='.', help="Path to a a local filesystem folder (e.g. /my/src/folder)".format(action))
+    parser.add_argument('--thread_count', default=10, help="Number of concurrent files to upload/download")
+    parser.add_argument('--max_retry', default=10, help="Max retries for uploading/downloading a file")
 
     args = parser.parse_args(command_line_args)
 

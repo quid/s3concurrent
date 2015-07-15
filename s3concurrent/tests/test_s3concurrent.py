@@ -243,8 +243,6 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertTrue(queue.is_empty())
         self.assertEquals(3, queue.de_queue_counter)
 
-    #TODO: finish the following 2 test cases
-
     @mock.patch('time.sleep')
     @mock.patch('s3concurrent.s3concurrent.is_sync_needed', return_value=True)
     def test_process_a_key_waiting(self, mocked_is_sync_needed, mocked_sleep):
