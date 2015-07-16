@@ -10,8 +10,8 @@ install_requires=[
 setup(
     name='s3concurrent',
     version='0.1.0',
-    author='',
-    author_email='',
+    author='Quid Inc.',
+    author_email='ops@quid.com',
     packages=['s3concurrent'],
     scripts=[],
     url='',
