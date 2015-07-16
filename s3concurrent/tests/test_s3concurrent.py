@@ -43,7 +43,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertFalse(queue.is_queuing())
 
-    @mock.patch('ntpath.dirname', side_effect=Exception)
+    @mock.patch('os.path.dirname', side_effect=Exception)
     def test_enqueue_s3_keys_for_download_error(self, mocked_dirname):
         mock_folder1 = 'a/b/'
         mocked_key1 = mock.Mock()

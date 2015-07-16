@@ -3,7 +3,6 @@
 import argparse
 import hashlib
 import logging
-import ntpath
 import os
 import sys
 import time
@@ -106,7 +105,7 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
         # prepare local destination structure
         destination = destination_folder + key.name.replace(prefix, '', 1) if prefix else ('/' + key.name)
         try:
-            containing_dir = ntpath.dirname(destination)
+            containing_dir = os.path.dirname(destination)
             if not os.path.exists(containing_dir):
                 os.makedirs(containing_dir)
         
