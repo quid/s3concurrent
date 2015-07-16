@@ -96,7 +96,7 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
     En-queues S3 Keys to be downloaded.
 
     :param s3_bucket:               Boto Bucket object that contains the keys to be downloaded
-    :param prefix:                  The path to the S3 folder to be downloaded, exp bucket_root/folder_1
+    :param prefix:                  The path to the S3 folder to be downloaded. Example: bucket_root/folder_1
     :param destination_folder:      The relative or absolute path to the folder you wish to download to
     :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     '''
@@ -219,7 +219,7 @@ def consume_queue(queue, action, thread_pool_size, max_retry):
     their respective destinations.
 
     :param queue:                   A ProcessKeyQueue instance to consume all the keys from
-    :param action:                  download or upload
+    :param action:                  "download" or "upload"
     :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to process files.)
     :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
     '''

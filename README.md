@@ -11,7 +11,8 @@ local file system.
 # Installation
 
 ```
-pip install s3concurrent
+git clone https://github.com/quid/s3concurrent.git
+pip install s3concurrent/
 ```
 
 # Usage

@@ -280,3 +280,9 @@ class TestS3Concurrent(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(sandbox)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+    
