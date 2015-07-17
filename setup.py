@@ -14,9 +14,10 @@ setup(
     author_email='ops@quid.com',
     packages=['s3concurrent'],
     scripts=[],
-    url='',
-    license='LICENSE',
-    description='A fast S3 downloader/uploader for deep file structures',
+    url='https://github.com/quid/s3concurrent',
+    license='MIT',
+    description='A fast S3 downloader/uploader for deep file structures.',
+    keywords='s3 download upload tools',
     long_description=open('README.md').read(),
     install_requires=install_requires,
     entry_points={

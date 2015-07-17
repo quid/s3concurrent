@@ -57,7 +57,7 @@ class ProcessKeyQueue:
 
     def de_queue_an_item(self):
         '''
-        De-queues an item from the queue
+        De-queues an item from the queue.
 
         :return:                an item previously enqueued
         '''
@@ -71,9 +71,9 @@ class ProcessKeyQueue:
 
     def is_queuing(self):
         '''
-        Checks if queuing all the process-able keys from S3
+        Checks if queuing all the process-able keys from S3.
 
-        :return                 True if still queuing
+        :return:                 True if still queuing
         '''
         return self.queuing
 
@@ -124,7 +124,7 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
     En-queues S3 Keys to be uploaded.
 
     :param s3_bucket:               Boto Bucket object that contains the keys to be uploaded to
-    :param prefix:                  The path to the S3 folder to be uploaded to, exp bucket_root/folder_1
+    :param prefix:                  The path to the S3 folder to be downloaded. Example: bucket_root/folder_1
     :param from_folder:             The relative or absolute path to the folder you wish to upload from
     :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     '''
@@ -179,7 +179,7 @@ def process_a_key(queue, action, max_retry):
 
     :param queue:                   A ProcessKeyQueue instance to de-queue a key from
     :param action:                  download or upload
-    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
+    :param max_retry:               The max times for s3concurrent to retry uploading/downloading a key
     '''
     if not queue.is_empty():
         key, local_path, enqueue_count = queue.de_queue_an_item()
@@ -220,7 +220,7 @@ def consume_queue(queue, action, thread_pool_size, max_retry):
     :param queue:                   A ProcessKeyQueue instance to consume all the keys from
     :param action:                  "download" or "upload"
     :param thread_pool_size:        The Designated thread pool size. (how many concurrent threads to process files.)
-    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
+    :param max_retry:               The max times for s3concurrent to retry uploading/downloading a key
     '''
     thread_pool = []
 
@@ -250,11 +250,11 @@ def process_all(action, s3_key, s3_secret, bucket_name, prefix, local_folder, qu
     :param s3_key:                  Your S3 API Key
     :param s3_secret:               Your S3 API Secret
     :param bucket_name:             Your S3 bucket name
-    :param prefix:                  Your path to the S3 folder to be uploaded/downloaded, exp bucket_root/folder_1
+    :param prefix:                  The path to the S3 folder to be downloaded. Example: bucket_root/folder_1
     :param local_folder:            The local folder you wish to upload/download the files from/to
     :param queue:                   A ProcessKeyQueue instance to enqueue all the keys in
     :param thread_count:            The number of threads that you wish s3concurrent to use
-    :param max_retry:               The max times for s3copncurrent to retry uploading/downloading a key
+    :param max_retry:               The max times for s3concurrent to retry uploading/downloading a key
     :return:                        True is all processed, false if interrupted in any way
     '''
     conn = S3Connection(s3_key, s3_secret)
