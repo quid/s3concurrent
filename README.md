@@ -1,6 +1,8 @@
 # Introduction
 
-s3concurrent uploads files to or download files from S3.  Features include:
+s3concurrent uploads/downloads files to/from S3. 
+
+Features include:
 
 * Handles deep folder structures with many files.  
 * Uploads/downloads many files concurrently.
