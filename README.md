@@ -81,3 +81,17 @@ Upload files from the folder '/tmp/benchmark' to a 'benchmark' folder on S3 with
 s3concurrent_upload <your_S3_Key> <your_S3_Secret> <your_S3_Bucket> --local_folder /tmp/benchmark --prefix benchmark --thread_count 10 --max_retry 3
 ```
 
+# Running the tests
+
+To run s3concurrent tests, please use the following command from s3concurrent's root directory after downloading the repository.
+
+```
+python -m unittest discover s3concurrent/tests
+```
+
+You should see all 14 tests passing in the end of the console outputs.
+    
+    ----------------------------------------------------------------------
+    Ran 14 tests in 0.222s
+    
+    OK
