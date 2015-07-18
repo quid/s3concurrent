@@ -1,55 +1,99 @@
 # Introduction
 
-s3concurrent is designed to upload and download (not too big in size) files with deep file structures out from S3 in a quick and concurrent manner.
+s3concurrent uploads/downloads files to/from S3. 
 
-Since S3 does not have a real folder structure, all the files are put into buckets using their key names to mimic logical hierarchy.
-For example, S3 files with key names a_folder/file_1.png, a_folder/file_2.png, and a_folder/file_3.png are considered to be in a logical folder `a_folder`.
+Features include:
 
-This key-value model grant S3 a easier approach to handle redundancy and direct file access.
-However when it comes to reconstructing folder structure from remote, current practices in multiple open source projects traverse through all the
-related keys (with prefix filters in boto) multiple times to pinpoint the exact keys/files to upload/download.
-This is approach is inefficient for mass file syncing.
-
-s3concurrent takes a different approach.
-It loops through all the targeted keys only once, construct local/s3 folder structure as it goes, and en-queue all the to-be-processed keys into a queue.
-With multiple (10 by default) different threads, it starts to consume the queue and upload/download all the files into their respective locations.
+* Handles deep folder structures with many files.  
+* Uploads/downloads many files concurrently.
+* Maintains folder structure between a S3 bucket and local file system.
+* Only uploads/downloads a file when a file has changed between S3 bucket and
+local file system.
 
 # Installation
 
 ```
-pip install s3concurrent
+git clone https://github.com/quid/s3concurrent.git
+pip install s3concurrent/
 ```
 
-# Detailed Usages
+# Usage
 
-s3concurrent brings you a local command you can use directly in your terminals.
+## s3concurrent_download
 
-For example, you would like to download the entire clone of pip repositories into your local mirror from S3 with 20 threads:
+    usage: s3concurrent_download [-h] [--prefix PREFIX]
+                           [--local_folder LOCAL_FOLDER]
+                           [--thread_count THREAD_COUNT]
+                           [--max_retry MAX_RETRY]
+                           s3_key s3_secret bucket_name
+
+    positional arguments:
+      s3_key                Your S3 API Key
+      s3_secret             Your S3 secret key
+      bucket_name           Your S3 bucket name
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --prefix PREFIX       Path to a folder in the S3 bucket (e.g. my/dest/folder/)
+      --local_folder LOCAL_FOLDER
+                            Path to a a local filesystem folder (e.g. /my/src/folder)
+      --thread_count THREAD_COUNT
+                            Number of concurrent files to upload/download
+      --max_retry MAX_RETRY
+                            Max retries for uploading/downloading a file
+
+## s3concurrent_upload
+
+    usage: s3concurrent_upload [-h] [--prefix PREFIX]
+                           [--local_folder LOCAL_FOLDER]
+                           [--thread_count THREAD_COUNT]
+                           [--max_retry MAX_RETRY]
+                           s3_key s3_secret bucket_name
+
+    positional arguments:
+      s3_key                Your S3 API Key
+      s3_secret             Your S3 secret key
+      bucket_name           Your S3 bucket name
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --prefix PREFIX       Path to a folder in the S3 bucket (e.g. my/dest/folder/)
+      --local_folder LOCAL_FOLDER
+                            Path to a a local filesystem folder (e.g. /my/src/folder)
+      --thread_count THREAD_COUNT
+                            Number of concurrent files to upload/download
+      --max_retry MAX_RETRY
+                            Max retries for uploading/downloading a file
+
+
+# Examples
+
+Download files from the folder 'mirror/pypi' in a S3 bucket to a local folder 
+'/path/to/mirror/pypi' with 20 concurrent downloads.
+
 
 ```
-s3concurrent_download <your_S3_Key> <your_S3_Secret> <your_S3_bucket_name> --local_folder my_local_mirror_dir --prefix mirror/pypi --thread_count 20
+s3concurrent_download <your_S3_Key> <your_S3_Secret> <your_S3_Bucket> --local_folder /path/to/mirror/pypi --prefix mirror/pypi --thread_count 20
 ```
 
-When it comes to upload the clone up to a different bucket in S3:
+Upload files from the folder '/tmp/benchmark' to a 'benchmark' folder on S3 with 
+10 concurrent uploads and 3 retries per upload.
 
 ```
-s3concurrent_upload <your_S3_Key> <your_S3_Secret> <your_anothger_S3_bucket_name> --local_folder my_local_mirror_dir --prefix mirror/pypi --thread_count 20
+s3concurrent_upload <your_S3_Key> <your_S3_Secret> <your_S3_Bucket> --local_folder /tmp/benchmark --prefix benchmark --thread_count 10 --max_retry 3
 ```
 
-## Optional
-### local_folder
+# Running the tests
 
-Absolute or relative path to the local folder. The default value is the current directory that you are in.
+To run s3concurrent tests, please use the following command from s3concurrent's root directory after downloading the repository.
 
-### prefix
+```
+python -m unittest discover s3concurrent/tests
+```
 
-The folder prefix in S3. If your wish to download all the files under folder_a/folder_b in a bucket.
-All you have to do here is to specify the prefix to `folder_a/folder_b`
-
-### thread_count
-
-The number of threads that s3concurrent will use to download the files. The default value is 10.
-
-### max_retry
-
-The max times for s3copncurrent to retry uploading/downloading a key
+You should see all 14 tests passing in the end of the console outputs.
+    
+    ----------------------------------------------------------------------
+    Ran 14 tests in 0.222s
+    
+    OK

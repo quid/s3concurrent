@@ -43,7 +43,7 @@ class TestS3Concurrent(unittest.TestCase):
 
         self.assertFalse(queue.is_queuing())
 
-    @mock.patch('ntpath.dirname', side_effect=Exception)
+    @mock.patch('os.path.dirname', side_effect=Exception)
     def test_enqueue_s3_keys_for_download_error(self, mocked_dirname):
         mock_folder1 = 'a/b/'
         mocked_key1 = mock.Mock()
@@ -243,8 +243,6 @@ class TestS3Concurrent(unittest.TestCase):
         self.assertTrue(queue.is_empty())
         self.assertEquals(3, queue.de_queue_counter)
 
-    #TODO: finish the following 2 test cases
-
     @mock.patch('time.sleep')
     @mock.patch('s3concurrent.s3concurrent.is_sync_needed', return_value=True)
     def test_process_a_key_waiting(self, mocked_is_sync_needed, mocked_sleep):
@@ -282,3 +280,9 @@ class TestS3Concurrent(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(sandbox)
+
+
+if __name__ == '__main__':
+    unittest.main()
+
+    
