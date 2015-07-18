@@ -1,9 +1,0 @@
-setup.cfg
-s3concurrent/__init__.py
-s3concurrent/s3concurrent.py
-s3concurrent.egg-info/PKG-INFO
-s3concurrent.egg-info/SOURCES.txt
-s3concurrent.egg-info/dependency_links.txt
-s3concurrent.egg-info/entry_points.txt
-s3concurrent.egg-info/requires.txt
-s3concurrent.egg-info/top_level.txt

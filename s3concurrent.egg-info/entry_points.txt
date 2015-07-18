@@ -1,4 +1,0 @@
-[console_scripts]
-s3concurrent_download = s3concurrent.s3concurrent:s3concurrent_download
-s3concurrent_upload = s3concurrent.s3concurrent:s3concurrent_upload
-
