@@ -109,7 +109,11 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
             if not os.path.exists(containing_dir):
                 os.makedirs(containing_dir)
         
-            # enqueue
+            # Don't queue more items while over 100,000 to prevent 
+            # memory explosion
+            while 100000 < queue.process_able_keys_queue():
+                time.sleep(1)
+
             queue.enqueue_item(key, destination)
 
         except:
@@ -141,6 +145,11 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
 
             key = Key(s3_bucket)
             key.key = s3_key_name
+
+            # Don't queue more items while over 100,000 to prevent 
+            # memory explosion
+            while 100000 < queue.process_able_keys_queue():
+                time.sleep(1)
 
             queue.enqueue_item(key, abs_file_path)
 
