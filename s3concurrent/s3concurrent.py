@@ -108,12 +108,13 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
             containing_dir = os.path.dirname(destination)
             if not os.path.exists(containing_dir):
                 os.makedirs(containing_dir)
-        
-            # Don't queue more items while over 100,000 to prevent 
+
+            # Don't queue more items while over 100,000 to prevent
             # memory explosion
             while 100000 < queue.process_able_keys_queue():
                 time.sleep(1)
 
+            # enqueue
             queue.enqueue_item(key, destination)
 
         except:
