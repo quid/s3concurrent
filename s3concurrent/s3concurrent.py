@@ -172,7 +172,7 @@ def is_sync_needed(key, local_file_path):
             if not key_etag:
                 key_etag = key.bucket.lookup(key.name).etag
 
-            local_md5 = '"' + hashlib.md5(open(local_file_path, 'rb').read()).hexdigest() + '"'
+            local_md5 = '"%s"' % _get_md5(local_file_path)
             sync_needed = key_etag != local_md5
 
         except:
@@ -181,6 +181,24 @@ def is_sync_needed(key, local_file_path):
                 .format(local_file_path, key.name))
 
     return sync_needed
+
+
+def _get_md5(filename, blocksize=65536):
+    '''
+    Retrieves the MD5 checksum for the given filename.
+
+    :param filename: (str), the file path to obtain the checksum of
+    :param blocksize: (int), the largest chunk of file size to read into memory
+    :return: the MD5 checksum
+    '''
+    hasher = hashlib.md5()
+    with open(filename, 'rb') as open_file:
+        buf = open_file.read(blocksize)
+        while len(buf) > 0:
+            hasher.update(buf)
+            buf = open_file.read(blocksize)
+
+        return hasher.hexdigest()
 
 
 def process_a_key(queue, action, max_retry):
