@@ -20,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s')
+formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s: %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
