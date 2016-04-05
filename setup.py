@@ -1,8 +1,9 @@
 from distutils.core import setup
 
 install_requires=[
-    "boto>=2.32.1",
     "argparse>=1.3.0",
+    "boto>=2.32.1",
+    "colorlog==2.6.1",
     "mock==1.0.1",
     "nose==1.3.4"
 ]

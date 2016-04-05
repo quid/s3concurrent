@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
 import argparse
+import colorlog
 import hashlib
 import logging
 import os
 import sys
-import time
 import threading
+import time
 
 from boto.s3.bucket import Bucket
 from boto.s3.connection import S3Connection
@@ -19,7 +20,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s:%(name)s:%(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
