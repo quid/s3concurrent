@@ -176,7 +176,8 @@ def is_sync_needed(key, local_file_path):
             sync_needed = key_etag != local_md5
 
         except:
-            logger.exception(
+            logger.exception(sys.exc_info())
+            logger.error(
                 'Cannot compare local file {0} against remote file {1}. s3concurrent will process it anyway.'
                 .format(local_file_path, key.name))
 
