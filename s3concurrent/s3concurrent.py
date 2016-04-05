@@ -234,8 +234,12 @@ def process_a_key(queue, action, max_retry):
                 logger.error('Ignoring {0} since s3concurrent had tried downloading {1} times.'.format(key.name, max_retry))
 
         except:
-            logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
-            queue.enqueue_item(key, local_path, enqueue_count=enqueue_count + 1)
+            if key.size == 0:
+                logger.info('%s is a directory, ignoring', key.name)
+
+            else:
+                logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
+                queue.enqueue_item(key, local_path, enqueue_count=enqueue_count + 1)
 
     else:
         # do nothing when the queue is empty
