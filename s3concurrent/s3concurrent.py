@@ -167,7 +167,7 @@ def is_sync_needed(key, local_file_path):
     :param local_file_path:             (str), path to download the key to
     '''
     sync_needed = True
-    if os.path.exists(local_file_path) and key.exists():
+    if os.path.isfile(local_file_path) and key.exists():
         try:
             key_etag = key.etag
             if not key_etag:
