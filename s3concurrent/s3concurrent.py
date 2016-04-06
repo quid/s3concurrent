@@ -201,15 +201,16 @@ def _calculate_s3_etag(file_path, part_size):
     block_count = 0
     md5string = ''
     with open(file_path, 'rb') as f:
-        for block in iter(lambda: f.read(part_size), ''):
-            hash = hashlib.md5()
-            hash.update(block)
-            md5string = md5string + binascii.unhexlify(hash.hexdigest())
+        buf = open_file.read(part_size)
+        while len(buf) > 0:
+            hasher = hashlib.md5()
+            hasher.update(block)
+            md5string += binascii.unhexlify(hasher.hexdigest())
             block_count += 1
 
-    hash = hashlib.md5()
-    hash.update(md5string)
-    return hash.hexdigest() + '-' + str(block_count)
+    hasher = hashlib.md5()
+    hasher.update(md5string)
+    return hasher.hexdigest() + '-' + str(block_count)
 
 
 def _get_md5(filename, blocksize=65536):
