@@ -8,11 +8,15 @@ import os
 import sys
 import threading
 import time
+import binascii
 
 from boto.s3.bucket import Bucket
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from Queue import Queue
+
+# AWS magic chunk size number. Discovered via brute force.
+AWS_UPLOAD_PART_SIZE = 64 * 1024 * 1024
 
 # configure logging
 logger = logging.getLogger()
@@ -173,8 +177,8 @@ def is_sync_needed(key, local_file_path):
             if not key_etag:
                 key_etag = key.bucket.lookup(key.name).etag
 
-            local_md5 = '"%s"' % _get_md5(local_file_path)
-            sync_needed = key_etag != local_md5
+            if not _s3_etag_match(key_etag, local_file_path):
+                sync_needed = True
 
         except:
             logger.exception(sys.exc_info())
@@ -183,6 +187,29 @@ def is_sync_needed(key, local_file_path):
                 .format(local_file_path, key.name))
 
     return sync_needed
+
+
+def _s3_etag_match(etag, file_path):
+    if '-' in etag:
+        return _calculate_s3_etag(file_path, AWS_UPLOAD_PART_SIZE) == etag
+
+    else:
+        return _get_md5(file_path) == etag
+
+
+def _calculate_s3_etag(file_path, part_size):
+    block_count = 0
+    md5string = ''
+    with open(file_path, 'rb') as f:
+        for block in iter(lambda: f.read(part_size), ''):
+            hash = hashlib.md5()
+            hash.update(block)
+            md5string = md5string + binascii.unhexlify(hash.hexdigest())
+            block_count += 1
+
+    hash = hashlib.md5()
+    hash.update(md5string)
+    return hash.hexdigest() + '-' + str(block_count)
 
 
 def _get_md5(filename, blocksize=65536):
