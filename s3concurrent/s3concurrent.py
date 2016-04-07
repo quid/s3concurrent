@@ -1,17 +1,22 @@
 #!/usr/bin/env python
 
 import argparse
+import binascii
+import colorlog
 import hashlib
 import logging
 import os
 import sys
-import time
 import threading
+import time
 
 from boto.s3.bucket import Bucket
 from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 from Queue import Queue
+
+# AWS magic chunk size number. Discovered via brute force.
+AWS_UPLOAD_PART_SIZE = 64 * 1024 * 1024
 
 # configure logging
 logger = logging.getLogger()
@@ -19,7 +24,7 @@ logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler(sys.stdout)
 ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+formatter = colorlog.ColoredFormatter('%(log_color)s%(levelname)s: %(message)s')
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
@@ -166,21 +171,68 @@ def is_sync_needed(key, local_file_path):
     :param local_file_path:             (str), path to download the key to
     '''
     sync_needed = True
-    if os.path.exists(local_file_path) and key.exists():
+    if os.path.isfile(local_file_path) and key.exists():
         try:
             key_etag = key.etag
             if not key_etag:
                 key_etag = key.bucket.lookup(key.name).etag
 
-            local_md5 = '"%s"' % _get_md5(local_file_path)
-            sync_needed = key_etag != local_md5
+            if not _s3_etag_match(key_etag, local_file_path):
+                sync_needed = False
 
         except:
-            logger.exception(
+            logger.exception(sys.exc_info())
+            logger.error(
                 'Cannot compare local file {0} against remote file {1}. s3concurrent will process it anyway.'
                 .format(local_file_path, key.name))
 
     return sync_needed
+
+
+def _s3_etag_match(etag, file_path):
+    '''
+    Checks if the local file's checksum matches the S3 etag.
+
+    :param key:                         (str), the S3 etag.
+    :param file_path:                   (str), the local file to check.
+    :return:                            (bool), whether or not the etag matches the checksum of the local file.
+    '''
+    matches = False
+
+    if '-' in etag:
+        # If the etag contains a dash, then the file was uploaded in parts
+        matches = _calculate_s3_etag(file_path, AWS_UPLOAD_PART_SIZE) == etag
+
+    else:
+        # Etag will be a MD5 checksum when the file was uploaded as a whole
+        matches = _get_md5(file_path) == etag
+
+    return matches
+
+
+def _calculate_s3_etag(file_path, part_size):
+    '''
+    Calculates the S3 etag of a file when the upload was performed in parts.
+
+    :param file_path:                   (str), the local file calculate the etag for.
+    :param part_size:                   (int), the size of the chunks that were used to upload the file to S3.
+    :return:                            (str), the calculated S3 etag of the local file.
+    '''
+    block_count = 0
+    md5string = ''
+    with open(file_path, 'rb') as open_file:
+        buf = open_file.read(part_size)
+        while len(buf) > 0:
+            hasher = hashlib.md5()
+            hasher.update(buf)
+            md5string += binascii.unhexlify(hasher.hexdigest())
+            block_count += 1
+
+            buf = open_file.read(part_size)
+
+    hasher = hashlib.md5()
+    hasher.update(md5string)
+    return hasher.hexdigest() + '-' + str(block_count)
 
 
 def _get_md5(filename, blocksize=65536):
@@ -232,8 +284,12 @@ def process_a_key(queue, action, max_retry):
                 logger.error('Ignoring {0} since s3concurrent had tried downloading {1} times.'.format(key.name, max_retry))
 
         except:
-            logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
-            queue.enqueue_item(key, local_path, enqueue_count=enqueue_count + 1)
+            if key.size == 0:
+                logger.info('%s is a directory, ignoring', key.name)
+
+            else:
+                logger.warn('Error {0}ing file with key: {1}, putting it back to the queue'.format(action, key.name))
+                queue.enqueue_item(key, local_path, enqueue_count=enqueue_count + 1)
 
     else:
         # do nothing when the queue is empty

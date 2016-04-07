@@ -3,8 +3,10 @@
 import mock
 import os
 import shutil
+import tempfile
 import time
 import unittest
+import uuid
 
 from s3concurrent import s3concurrent
 
@@ -178,6 +180,8 @@ class TestS3Concurrent(unittest.TestCase):
         with open(mocked_file_path, 'wb') as f:
             f.write('mocked file')
 
+        self.assertEquals('de3a2ccff42d63dc60c6955634d122da', s3concurrent._get_md5(mocked_file_path))
+
         download = s3concurrent.is_sync_needed(mocked_key1, mocked_file_path)
         self.assertFalse(download)
 
@@ -272,6 +276,66 @@ class TestS3Concurrent(unittest.TestCase):
         s3concurrent.process_a_key(queue, 'download', 1)
 
         self.assertEquals(0, mocked_sleep.call_count)
+
+    def test_get_md5(self):
+        self.assertEquals(
+            '032b6af31d2d1be87ff63adb423d270f',
+            s3concurrent._get_md5(self.temp_filename)
+        )
+
+    def test_calculate_s3_etag(self):
+        self.assertEquals(
+            '3d6c16c58ab63e8b4f66cb09040eb660-5',
+            s3concurrent._calculate_s3_etag(self.temp_filename, s3concurrent.AWS_UPLOAD_PART_SIZE)
+        )
+
+    def test_s3_etag_match_with_multipart_upload(self):
+        self.assertTrue(
+            s3concurrent._s3_etag_match(
+                '3d6c16c58ab63e8b4f66cb09040eb660-5',
+                self.temp_filename
+            )
+        )
+
+    def test_s3_etag_match_with_multipart_upload_incorrect(self):
+        self.assertFalse(
+            s3concurrent._s3_etag_match(
+                '3d6d16c58ab63e8b4f66cb09040eb660-5',
+                self.temp_filename
+            )
+        )
+
+    def test_s3_etag_match_with_singlepart_upload(self):
+        self.assertTrue(
+            s3concurrent._s3_etag_match(
+                '032b6af31d2d1be87ff63adb423d270f',
+                self.temp_filename
+            )
+        )
+
+    def test_s3_etag_match_with_singlepart_upload_incorrect(self):
+        self.assertFalse(
+            s3concurrent._s3_etag_match(
+                '032b6bf31d2d1be87ff63adb423d270f',
+                self.temp_filename
+            )
+        )
+
+    @classmethod
+    def setUpClass(cls):
+        # Create a predictable 296.1 MB temporary file
+        elements = [200, 50, 25] * 9999
+        cls.temp_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', "%s.bin" % uuid.uuid4())
+        tempfile = open(cls.temp_filename, 'wb')
+
+        for i in xrange(0, 9872):
+            tempfile.write(bytearray(elements))
+
+        tempfile.close()
+
+    @classmethod
+    def tearDownClass(cls):
+        os.remove(cls.temp_filename)
 
     def setUp(self):
         if os.path.exists(sandbox):
