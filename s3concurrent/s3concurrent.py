@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import argparse
+import binascii
 import colorlog
 import hashlib
 import logging
@@ -8,7 +9,6 @@ import os
 import sys
 import threading
 import time
-import binascii
 
 from boto.s3.bucket import Bucket
 from boto.s3.connection import S3Connection
@@ -190,14 +190,34 @@ def is_sync_needed(key, local_file_path):
 
 
 def _s3_etag_match(etag, file_path):
+    '''
+    Checks if the local file's checksum matches the S3 etag.
+
+    :param key:                         (str), the S3 etag.
+    :param file_path:                   (str), the local file to check.
+    :return:                            (bool), whether or not the etag matches the checksum of the local file.
+    '''
+    matches = False
+
     if '-' in etag:
-        return _calculate_s3_etag(file_path, AWS_UPLOAD_PART_SIZE) == etag
+        # If the etag contains a dash, then the file was uploaded in parts
+        matches = _calculate_s3_etag(file_path, AWS_UPLOAD_PART_SIZE) == etag
 
     else:
-        return _get_md5(file_path) == etag
+        # Etag will be a MD5 checksum when the file was uploaded as a whole
+        matches = _get_md5(file_path) == etag
+
+    return matches
 
 
 def _calculate_s3_etag(file_path, part_size):
+    '''
+    Calculates the S3 etag of a file when the upload was performed in parts.
+
+    :param file_path:                   (str), the local file calculate the etag for.
+    :param part_size:                   (int), the size of the chunks that were used to upload the file to S3.
+    :return:                            (str), the calculated S3 etag of the local file.
+    '''
     block_count = 0
     md5string = ''
     with open(file_path, 'rb') as open_file:
