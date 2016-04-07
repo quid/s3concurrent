@@ -178,7 +178,7 @@ def is_sync_needed(key, local_file_path):
                 key_etag = key.bucket.lookup(key.name).etag
 
             if not _s3_etag_match(key_etag, local_file_path):
-                sync_needed = True
+                sync_needed = False
 
         except:
             logger.exception(sys.exc_info())
@@ -200,13 +200,15 @@ def _s3_etag_match(etag, file_path):
 def _calculate_s3_etag(file_path, part_size):
     block_count = 0
     md5string = ''
-    with open(file_path, 'rb') as f:
+    with open(file_path, 'rb') as open_file:
         buf = open_file.read(part_size)
         while len(buf) > 0:
             hasher = hashlib.md5()
-            hasher.update(block)
+            hasher.update(buf)
             md5string += binascii.unhexlify(hasher.hexdigest())
             block_count += 1
+
+            buf = open_file.read(part_size)
 
     hasher = hashlib.md5()
     hasher.update(md5string)
