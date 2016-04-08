@@ -9,4 +9,4 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__
 import s3concurrent
 
 if __name__ == '__main__':
-    sys.exit(s3concurrent.main('download', sys.argv))
+    sys.exit(s3concurrent.main('download', sys.argv[1:]))
