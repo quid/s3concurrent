@@ -3,7 +3,6 @@
 *.egg
 *.EGG
 *.EGG-INFO
-bin
 build
 develop-eggs
 downloads
