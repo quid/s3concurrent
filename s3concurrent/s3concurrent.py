@@ -18,7 +18,10 @@ from Queue import Queue
 # AWS magic chunk size number. Discovered via brute force.
 AWS_UPLOAD_PART_SIZE = 64 * 1024 * 1024
 
-# configure logging
+# Max number of items allowed in the queue to keep from blowing up memory
+MAX_QUEUE_SIZE = 100000
+
+# Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
@@ -114,9 +117,8 @@ def enqueue_s3_keys_for_download(s3_bucket, prefix, destination_folder, queue):
             if not os.path.exists(containing_dir):
                 os.makedirs(containing_dir)
 
-            # Don't queue more items while over 100,000 to prevent
-            # memory explosion
-            while 100000 < queue.process_able_keys_queue.qsize():
+            # Don't queue more items while over 100,000 to prevent memory explosion
+            while MAX_QUEUE_SIZE < queue.process_able_keys_queue.qsize():
                 time.sleep(1)
 
             # enqueue
@@ -152,9 +154,8 @@ def enqueue_s3_keys_for_upload(s3_bucket, prefix, from_folder, queue):
             key = Key(s3_bucket)
             key.key = s3_key_name
 
-            # Don't queue more items while over 100,000 to prevent
-            # memory explosion
-            while 100000 < queue.process_able_keys_queue.qsize():
+            # Don't queue more items to prevent memory explosion
+            while MAX_QUEUE_SIZE < queue.process_able_keys_queue.qsize():
                 time.sleep(1)
 
             queue.enqueue_item(key, abs_file_path)

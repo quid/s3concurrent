@@ -3,7 +3,7 @@ from pip.req import parse_requirements
 
 setup(
     name='s3concurrent',
-    version='0.2.2',
+    version='0.3.0',
     author='Quid Inc.',
     author_email='ops@quid.com',
     packages=['s3concurrent'],
